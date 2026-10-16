@@ -4,7 +4,7 @@ import type { CredentialResponse } from '@react-oauth/google'
 import { useCallback, useEffect, useState } from 'react'
 import './App.css'
 
-const API = 'http://localhost:3000/api'
+const API = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api`
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 const MAX_FILES = 5
 
