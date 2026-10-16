@@ -48,6 +48,18 @@ async function initializeDatabase() {
         sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS email_attachments (
+        id BIGSERIAL PRIMARY KEY,
+        email_job_id UUID NOT NULL
+          REFERENCES email_jobs(id) ON DELETE CASCADE,
+        original_name TEXT NOT NULL,
+        stored_name TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        mime_type VARCHAR(255),
+        file_size BIGINT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
       CREATE INDEX IF NOT EXISTS idx_email_jobs_status_scheduled
         ON email_jobs(status, scheduled_at);
 
@@ -56,10 +68,22 @@ async function initializeDatabase() {
 
       CREATE INDEX IF NOT EXISTS idx_sender_email_sends_sender_time
         ON sender_email_sends(sender_id, sent_at);
+
+      CREATE INDEX IF NOT EXISTS idx_email_attachments_email_job
+        ON email_attachments(email_job_id);
+
+      CREATE TABLE IF NOT EXISTS slack_connections (
+        id SERIAL PRIMARY KEY,
+        team_id VARCHAR(100) UNIQUE NOT NULL,
+        team_name VARCHAR(255),
+        bot_access_token TEXT NOT NULL,
+        scope TEXT,
+        connected_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
     `);
 
     console.log(
-      "Database tables and sender rate-limit settings are ready!"
+      "Database tables, attachment storage records, sender rate-limit settings, and Slack connections are ready!"
     );
   } catch (error) {
     console.error("Database initialization failed:", error);

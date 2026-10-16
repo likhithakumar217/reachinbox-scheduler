@@ -1,4 +1,7 @@
-
+import "dotenv/config";
+import googleAuthRoutes from "./routes/google-auth.routes";
+import slackRoutes from "./routes/slack.routes";
+import attachmentRoutes from "./routes/attachment.routes";
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
@@ -29,11 +32,14 @@ createBullBoard({
 // Middleware
 app.use(cors());
 app.use(express.json());
-
+app.use("/api/slack", slackRoutes);
+// API routes
 // API routes
 app.use("/admin/queues", serverAdapter.getRouter());
 app.use("/api/emails", emailRoutes);
 app.use("/api/senders", senderRoutes);
+app.use("/api/attachments", attachmentRoutes);
+app.use("/api/auth/google", googleAuthRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {
