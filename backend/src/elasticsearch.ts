@@ -1,8 +1,20 @@
 
 import { Client } from "@elastic/elasticsearch";
 
+const elasticsearchUrl =
+  process.env.ELASTICSEARCH_URL || "http://localhost:9200";
+
+const elasticsearchApiKey = process.env.ELASTICSEARCH_API_KEY;
+
 export const elasticsearchClient = new Client({
-  node: process.env.ELASTICSEARCH_URL || "http://localhost:9200",
+  node: elasticsearchUrl,
+  ...(elasticsearchApiKey
+    ? {
+        auth: {
+          apiKey: elasticsearchApiKey,
+        },
+      }
+    : {}),
 });
 
 export const EMAIL_INDEX = "emails";
