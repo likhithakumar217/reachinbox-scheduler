@@ -1,17 +1,18 @@
-import "dotenv/config";
-import googleAuthRoutes from "./routes/google-auth.routes";
-import slackRoutes from "./routes/slack.routes";
-import attachmentRoutes from "./routes/attachment.routes";
+
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
 
+import googleAuthRoutes from "./routes/google-auth.routes";
+import slackRoutes from "./routes/slack.routes";
+import attachmentRoutes from "./routes/attachment.routes";
+import emailRoutes from "./routes/email.routes";
+import senderRoutes from "./routes/sender.routes";
+
 import { pool } from "./db";
 import { emailQueue } from "./queue";
 import { createEmailIndex } from "./elasticsearch";
-
-import emailRoutes from "./routes/email.routes";
-import senderRoutes from "./routes/sender.routes";
+import { initializeDatabaseSchema } from "./init-db-schema";
 
 import { createBullBoard } from "@bull-board/api";
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
@@ -32,9 +33,9 @@ createBullBoard({
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// API routes
 app.use("/api/slack", slackRoutes);
-// API routes
-// API routes
 app.use("/admin/queues", serverAdapter.getRouter());
 app.use("/api/emails", emailRoutes);
 app.use("/api/senders", senderRoutes);
@@ -64,14 +65,17 @@ app.get("/api/db-test", async (_req, res) => {
 
     res.status(500).json({
       status: "ERROR",
-      message: "Could not connect to PostgreSQL. Check Docker and .env.",
+      message: "Could not connect to PostgreSQL.",
     });
   }
 });
 
-// Initialize Elasticsearch before starting the server
+// Initialize services before starting the server
 async function startServer() {
   try {
+    await initializeDatabaseSchema();
+    console.log("PostgreSQL database schema is ready.");
+
     await createEmailIndex();
     console.log("Elasticsearch emails index is ready.");
 
@@ -82,7 +86,7 @@ async function startServer() {
       );
     });
   } catch (error) {
-    console.error("Failed to initialize Elasticsearch:", error);
+    console.error("Failed to initialize backend services:", error);
     process.exit(1);
   }
 }
