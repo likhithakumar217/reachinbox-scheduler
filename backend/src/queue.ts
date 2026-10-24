@@ -8,9 +8,6 @@ const redisUrl = process.env.REDIS_URL;
 export const redisConnection = redisUrl
   ? new IORedis(redisUrl, {
       maxRetriesPerRequest: null,
-      ...(redisUrl.startsWith("rediss://")
-        ? { tls: {} }
-        : {}),
     })
   : new IORedis({
       host: process.env.REDIS_HOST || "127.0.0.1",
