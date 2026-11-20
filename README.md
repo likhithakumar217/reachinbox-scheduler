@@ -2,9 +2,15 @@
 
 A full-stack email scheduling application that lets users compose email campaigns, upload leads, schedule deliveries, and monitor email status from a dashboard.
 
+## Public demo (Vercel)
+
+Run `npm ci` and `npm run dev` at the project root. For Vercel use the Vite preset, build command `npm run build`, output directory `dist`. No backend or environment variables required. The sample dashboard uses in-memory state, supports composing, CSV/TXT parsing, local attachment selection, scheduling and simulated sending. Scheduled records become simulated sent records while the page is open. Refresh or logout resets the data. No data is uploaded or delivered externally. Rate limits, queue processing and SMTP are not exercised by the public demo.
+
+The existing backend and worker are retained for separate local engineering tests. The backend binds to loopback only. The original API is not authenticated; do not expose it over a public network or proxy. The feature and architecture descriptions below refer to the retained backend implementation, not the browser-only demo.
+
 ## Features
 
-- **Google Sign-In:** Verify Google ID tokens on the backend and display the signed-in user's profile.
+- **Demo login:** Enter a browser-only sample workspace; no Google account required.
 - **Email scheduling:** Schedule emails for a future time using BullMQ and Redis delayed jobs.
 - **Email sending:** Process scheduled jobs using a dedicated worker and SMTP.
 - **Lead uploads:** Import email addresses from CSV and TXT files.
@@ -34,7 +40,6 @@ A full-stack email scheduling application that lets users compose email campaign
 - BullMQ
 - Elasticsearch
 - SMTP via Ethereal Email
-- Google OAuth token verification
 - Slack OAuth and notifications
 
 ## Architecture
@@ -57,7 +62,7 @@ Install the following before running the project:
 - Redis
 - Elasticsearch
 
-You will also need Google OAuth credentials and Slack app credentials if you want to test those integrations.
+Slack credentials are only needed for local backend integration testing.
 
 ## Environment Configuration
 
@@ -65,18 +70,13 @@ Create the required environment files locally. **Never commit `.env` files or re
 
 ### Frontend
 
-In the project root, create `.env`:
-
-```env
-VITE_GOOGLE_CLIENT_ID=your_google_oauth_client_id
-```
+No environment variables are required for the demo.
 
 ### Backend
 
 In `backend/.env`, configure the variables expected by the backend, including:
 
 ```env
-GOOGLE_CLIENT_ID=your_google_oauth_client_id
 FRONTEND_URL=http://localhost:5174
 SLACK_CLIENT_ID=your_slack_client_id
 SLACK_CLIENT_SECRET=your_slack_client_secret
@@ -87,7 +87,7 @@ SLACK_NOTIFICATION_CHANNEL=your_slack_channel_id
 
 Configure the PostgreSQL connection, Redis connection, Elasticsearch endpoint, SMTP host, SMTP port, SMTP credentials, and any other required settings according to the backend configuration and source code. Use Ethereal Email credentials for test email delivery.
 
-The Google client ID used by the frontend and backend must match. Do not expose OAuth client secrets or SMTP credentials in frontend variables.
+Do not expose OAuth client secrets or SMTP credentials in frontend variables.
 
 ## Installation
 
@@ -162,7 +162,7 @@ npm run build
 
 The demonstration video should be no longer than five minutes and show:
 
-1. Google sign-in and the user profile.
+1. Demo login and the user profile.
 2. The email dashboard and compose form.
 3. Uploading a small CSV or TXT leads file.
 4. Scheduling an email with a future execution time.
@@ -176,11 +176,10 @@ Use a controlled test recipient and test credentials. Do not show secrets, priva
 ## Security Notes
 
 - Keep environment files and credentials out of version control.
-- Verify Google ID tokens on the backend.
-- Google profile display alone does not establish a persistent server-side session or protect the API.
+- Demo login is not authentication. The backend is local-only and must not be exposed publicly without real API authentication.
 - Configure authentication and authorization before exposing protected operations or the queue dashboard publicly.
 - Use test email accounts and follow applicable email-sending rules.
 
 ## Project Status
 
-The frontend production build has completed successfully, and Google sign-in, profile display, logout, dashboard loading, and worker startup have been manually checked. Verify each additional feature against the current implementation before making claims about a production deployment.
+The demo changes need a fresh build and browser verification.

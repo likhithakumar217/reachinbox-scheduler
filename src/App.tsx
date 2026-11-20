@@ -1,10 +1,7 @@
 
-import { GoogleLogin, googleLogout } from '@react-oauth/google'
-import type { CredentialResponse } from '@react-oauth/google'
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 
-const API = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api`
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 const MAX_FILES = 5
 
@@ -28,19 +25,15 @@ type Sender = {
   min_interval_seconds: number
 }
 
-type UploadedAttachment = {
-  originalName: string
-  storedName: string
-  filePath: string
-  mimeType: string
-  fileSize: number
+function settleDemoEmails(emails: Email[], now: number): Email[] {
+  return emails.map(email => email.status === 'scheduled' && Date.parse(email.scheduled_at) <= now
+    ? { ...email, status: 'sent', sent_at: new Date(now).toISOString() }
+    : email)
 }
 
-type GoogleUser = {
-  id: string
-  name: string
-  email: string
-  picture: string | null
+function localDateTime(timestamp: number) {
+  const date = new Date(timestamp)
+  return new Date(timestamp - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 }
 
 function App() {
@@ -51,97 +44,46 @@ function App() {
   const [body, setBody] = useState('')
   const [startTime, setStartTime] = useState('')
   const [delay, setDelay] = useState(10)
-  const [senderId, setSenderId] = useState('')
+  const [senderId, setSenderId] = useState('1')
   const [leads, setLeads] = useState<string[]>([])
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([])
-  const [uploadingAttachments, setUploadingAttachments] = useState(false)
   const [emails, setEmails] = useState<Email[]>([])
-  const [senders, setSenders] = useState<Sender[]>([])
+  const [senders] = useState<Sender[]>([
+    { id: 1, name: 'Demo Sender', email: 'sender@example.com', hourly_limit: 20, min_interval_seconds: 60 },
+  ])
   const [message, setMessage] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
+  const [demoUser, setDemoUser] = useState(false)
 
-  const [googleUser, setGoogleUser] = useState<GoogleUser | null>(null)
-  const [googleLoginError, setGoogleLoginError] = useState('')
-  const [googleLoginLoading, setGoogleLoginLoading] = useState(false)
+  function handleDemoLogin() {
+    const now = Date.now()
+    setEmails([
+      { id: 'sample-1', recipient_email: 'alex@example.com', subject: 'Welcome campaign', scheduled_at: new Date(now + 3600000).toISOString(), sent_at: null, status: 'scheduled' },
+      { id: 'sample-2', recipient_email: 'sam@example.com', subject: 'Product introduction', scheduled_at: new Date(now - 3600000).toISOString(), sent_at: new Date(now - 3600000).toISOString(), status: 'sent' },
+    ])
+    setDemoUser(true)
+  }
 
-  const loadData = useCallback(async () => {
-    try {
-      const [emailResponse, senderResponse] = await Promise.all([
-        fetch(`${API}/emails`),
-        fetch(`${API}/senders`),
-      ])
+  function handleDemoLogout() {
+    setDemoUser(false)
+    setEmails([])
+    setShowCompose(false)
+    setMessage('')
+    setActiveTab('Scheduled')
+    setDelay(10)
+    clearCompose()
+  }
 
-      if (!emailResponse.ok || !senderResponse.ok) {
-        throw new Error('Could not load dashboard data.')
-      }
-
-      const emailData: Email[] = await emailResponse.json()
-      const senderData: Sender[] = await senderResponse.json()
-
-      setEmails(emailData)
-      setSenders(senderData)
-
-      if (senderData.length > 0) {
-        setSenderId(current => current || String(senderData[0].id))
-      }
-
-      setMessage(current =>
-        current.includes('Make sure the backend is running.') ? '' : current
-      )
-    } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? `${error.message} Make sure the backend is running.`
-          : 'Could not connect to the backend.'
-      )
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  function loadData() {
+    setEmails(current => settleDemoEmails(current, Date.now()))
+  }
 
   useEffect(() => {
-    void loadData()
-  }, [loadData])
-
-  async function handleGoogleLogin(response: CredentialResponse) {
-    if (!response.credential) {
-      setGoogleLoginError('Google did not return a sign-in credential.')
-      return
-    }
-
-    setGoogleLoginLoading(true)
-    setGoogleLoginError('')
-
-    try {
-      const result = await fetch(`${API}/auth/google/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential: response.credential }),
-      })
-
-      const data = await result.json()
-
-      if (!result.ok || !data.user) {
-        throw new Error(data.message || 'Google sign-in failed.')
-      }
-
-      const user = data.user as GoogleUser
-      setGoogleUser(user)
-    } catch (error) {
-      setGoogleLoginError(
-        error instanceof Error ? error.message : 'Google sign-in failed.'
-      )
-    } finally {
-      setGoogleLoginLoading(false)
-    }
-  }
-
-  function handleGoogleLogout() {
-    googleLogout()
-    setGoogleUser(null)
-    setGoogleLoginError('')
-  }
+    if (!demoUser) return
+    const timer = window.setInterval(() => {
+      setEmails(current => settleDemoEmails(current, Date.now()))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [demoUser])
 
   function parseFile(file?: File) {
     if (!file) return
@@ -215,39 +157,6 @@ function App() {
     )
   }
 
-  async function uploadAttachments(): Promise<UploadedAttachment[]> {
-    if (attachmentFiles.length === 0) return []
-
-    setUploadingAttachments(true)
-
-    try {
-      const formData = new FormData()
-
-      attachmentFiles.forEach(file => {
-        formData.append('attachments', file)
-      })
-
-      const response = await fetch(`${API}/attachments/upload`, {
-        method: 'POST',
-        body: formData,
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Attachment upload failed.')
-      }
-
-      if (!Array.isArray(result.files)) {
-        throw new Error('The server returned an unexpected upload response.')
-      }
-
-      return result.files as UploadedAttachment[]
-    } finally {
-      setUploadingAttachments(false)
-    }
-  }
-
   function getRecipients(): string[] | null {
     const manualEmail = recipientEmail.trim().toLowerCase()
 
@@ -290,173 +199,37 @@ function App() {
     setAttachmentFiles([])
   }
 
-  async function scheduleEmails() {
-    setMessage('')
-
+  function submitDemoEmails(sendNow: boolean) {
     const recipients = getRecipients()
     if (!recipients) return
-
-    if (!startTime) {
-      setMessage('Choose a future start time for your scheduled emails.')
-      return
-    }
-
-    const start = new Date(startTime)
-
-    if (Number.isNaN(start.getTime()) || start.getTime() <= Date.now()) {
+    const now = Date.now()
+    const start = sendNow ? now : new Date(startTime).getTime()
+    if (!sendNow && (!Number.isFinite(start) || start <= now)) {
       setMessage('Choose a start time in the future.')
       return
     }
-
-    setSubmitting(true)
-    let succeeded = 0
-    const errors: string[] = []
-
-    try {
-      let uploadedAttachments: UploadedAttachment[]
-
-      try {
-        uploadedAttachments = await uploadAttachments()
-      } catch (error) {
-        setMessage(
-          error instanceof Error
-            ? error.message
-            : 'Could not upload attachments.'
-        )
-        return
-      }
-
-      for (let index = 0; index < recipients.length; index++) {
-        const scheduledAt = new Date(
-          start.getTime() + index * Math.max(1, delay) * 1000
-        )
-
-        try {
-          const response = await fetch(`${API}/emails/schedule`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Idempotency-Key': crypto.randomUUID(),
-            },
-            body: JSON.stringify({
-              senderId: Number(senderId),
-              recipientEmail: recipients[index],
-              subject: subject.trim(),
-              body: body.trim(),
-              scheduledAt: scheduledAt.toISOString(),
-              attachments: uploadedAttachments,
-            }),
-          })
-
-          const result = await response.json()
-
-          if (!response.ok) {
-            throw new Error(result.message || 'Scheduling failed.')
-          }
-
-          succeeded++
-        } catch (error) {
-          errors.push(
-            `${recipients[index]}: ${
-              error instanceof Error ? error.message : 'Unknown error'
-            }`
-          )
-        }
-      }
-
-      await loadData()
-
-      if (errors.length === 0) {
-        setMessage(`Successfully scheduled ${succeeded} email(s).`)
-        setShowCompose(false)
-        clearCompose()
-        setActiveTab('Scheduled')
-      } else {
-        setMessage(
-          `Scheduled ${succeeded} of ${recipients.length} emails. ` +
-            `Errors: ${errors.slice(0, 3).join(' | ')}`
-        )
-      }
-    } finally {
-      setSubmitting(false)
+    if (recipients.length > 1000) {
+      setMessage('Demo limit: 1,000 recipients per campaign.')
+      return
     }
-  }
-
-  async function sendEmailsNow() {
-    setMessage('')
-
-    const recipients = getRecipients()
-    if (!recipients) return
-
-    setSubmitting(true)
-    let succeeded = 0
-    const errors: string[] = []
-
-    try {
-      let uploadedAttachments: UploadedAttachment[]
-
-      try {
-        uploadedAttachments = await uploadAttachments()
-      } catch (error) {
-        setMessage(
-          error instanceof Error
-            ? error.message
-            : 'Could not upload attachments.'
-        )
-        return
-      }
-
-      for (const recipient of recipients) {
-        try {
-          const response = await fetch(`${API}/emails/send-now`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Idempotency-Key': crypto.randomUUID(),
-            },
-            body: JSON.stringify({
-              senderId: Number(senderId),
-              recipientEmail: recipient,
-              subject: subject.trim(),
-              body: body.trim(),
-              attachments: uploadedAttachments,
-            }),
-          })
-
-          const result = await response.json()
-
-          if (!response.ok) {
-            throw new Error(result.message || 'Could not queue email.')
-          }
-
-          succeeded++
-        } catch (error) {
-          errors.push(
-            `${recipient}: ${
-              error instanceof Error ? error.message : 'Unknown error'
-            }`
-          )
-        }
-      }
-
-      await loadData()
-
-      if (errors.length === 0) {
-        setMessage(
-          `Queued ${succeeded} email(s) for immediate sending. Check their status in the dashboard.`
-        )
-        setShowCompose(false)
-        clearCompose()
-        setActiveTab('Scheduled')
-      } else {
-        setMessage(
-          `Queued ${succeeded} of ${recipients.length} emails. ` +
-            `Errors: ${errors.slice(0, 3).join(' | ')}`
-        )
-      }
-    } finally {
-      setSubmitting(false)
+    const interval = Math.max(1, Number.isFinite(delay) ? delay : 1) * 1000
+    if (!sendNow && !Number.isFinite(new Date(start + (recipients.length - 1) * interval).getTime())) {
+      setMessage('Choose a smaller scheduling delay.')
+      return
     }
+    const jobs: Email[] = recipients.map((recipient, index) => ({
+      id: crypto.randomUUID(),
+      recipient_email: recipient,
+      subject: subject.trim(),
+      scheduled_at: new Date(start + (sendNow ? 0 : index * interval)).toISOString(),
+      sent_at: sendNow ? new Date(now).toISOString() : null,
+      status: sendNow ? 'sent' : 'scheduled',
+    }))
+    setEmails(current => [...jobs, ...current])
+    setMessage(`${jobs.length} email(s) ${sendNow ? 'marked sent' : 'scheduled'} in demo mode. No real emails or attachments were transmitted.`)
+    setShowCompose(false)
+    clearCompose()
+    setActiveTab(sendNow ? 'Sent' : 'Scheduled')
   }
 
   const selectedSender = senders.find(
@@ -476,6 +249,20 @@ function App() {
 
   const totalSent = emails.filter(email => email.status === 'sent').length
   const failedCount = emails.filter(email => email.status === 'failed').length
+
+  if (!demoUser) return (
+    <main className="flex min-h-screen items-center justify-center bg-[#0b1120] p-6 text-slate-100">
+      <section className="w-full max-w-md rounded-2xl border border-slate-700 bg-[#111827] p-8 text-center shadow-2xl">
+        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-xl bg-violet-600 text-2xl font-bold">R</div>
+        <h1 className="text-3xl font-bold">ReachInbox</h1>
+        <p className="mt-2 text-slate-400">Smart Email Scheduling</p>
+        <h2 className="mt-8 text-xl font-semibold">Welcome to ReachInbox</h2>
+        <p className="mt-3 text-sm text-slate-400">Explore a sample campaign workspace without creating an account.</p>
+        <button onClick={handleDemoLogin} className="mt-6 w-full rounded-xl bg-violet-600 px-5 py-3 font-semibold text-white hover:bg-violet-500">Continue as Demo User</button>
+        <p className="mt-4 text-xs text-slate-400">Simulation only. No real emails are sent. Data resets on logout or refresh.</p>
+      </section>
+    </main>
+  )
 
   return (
     <div className="min-h-screen bg-[#0b1120] text-slate-100">
@@ -501,60 +288,20 @@ function App() {
               ↻ Refresh data
             </button>
 
-            {googleUser ? (
-              <div className="flex flex-wrap items-center gap-3">
-                {googleUser.picture && (
-                  <img
-                    src={googleUser.picture}
-                    alt="Google profile"
-                    referrerPolicy="no-referrer"
-                    className="h-9 w-9 rounded-full border border-slate-600 object-cover"
-                  />
-                )}
-
-                <div className="hidden sm:block">
-                  <p className="text-sm font-semibold text-white">
-                    {googleUser.name}
-                  </p>
-                  <p className="text-xs text-slate-400">{googleUser.email}</p>
-                </div>
-
-                <button
-                  onClick={handleGoogleLogout}
-                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 transition hover:bg-slate-800"
-                >
-                  Logout
-                </button>
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:block">
+                <p className="text-sm font-semibold text-white">Demo User</p>
+                <p className="text-xs text-slate-400">demo@example.com</p>
               </div>
-            ) : (
-              <GoogleLogin
-                onSuccess={(response) => void handleGoogleLogin(response)}
-                onError={() =>
-                  setGoogleLoginError('Google sign-in was unsuccessful.')
-                }
-                useOneTap={false}
-              />
-            )}
+              <button onClick={handleDemoLogout} className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">Logout</button>
+            </div>
           </div>
         </div>
 
-        {googleLoginLoading && (
-          <p className="mx-auto max-w-7xl px-6 pb-3 text-sm text-violet-300">
-            Verifying Google sign-in...
-          </p>
-        )}
-
-        {googleLoginError && (
-          <p
-            role="alert"
-            className="mx-auto max-w-7xl px-6 pb-3 text-sm text-rose-300"
-          >
-            {googleLoginError}
-          </p>
-        )}
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-10">
+        <p className="mb-5 rounded-lg border border-violet-500/30 bg-violet-500/10 p-3 text-sm text-violet-200">Demo mode · Simulated email delivery · No data is sent to a server.</p>
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div>
             <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-violet-400">
@@ -613,11 +360,7 @@ function App() {
             ))}
           </div>
 
-          {loading ? (
-            <div className="px-6 py-20 text-center text-slate-400">
-              Loading emails from backend...
-            </div>
-          ) : visibleEmails.length === 0 ? (
+          {visibleEmails.length === 0 ? (
             <div className="px-6 py-20 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-violet-500/20 bg-violet-500/10 text-2xl text-violet-300">
                 ✉
@@ -626,7 +369,7 @@ function App() {
                 No {activeTab.toLowerCase()} emails yet
               </h3>
               <p className="mt-2 text-sm text-slate-400">
-                Your backend email records will appear here.
+                Your demo email records will appear here.
               </p>
             </div>
           ) : (
@@ -713,7 +456,7 @@ function App() {
 
             {selectedSender && (
               <p className="mt-2 text-xs text-slate-400">
-                Limit: {selectedSender.hourly_limit} emails/hour · Minimum
+                Backend configuration (not enforced in demo): {selectedSender.hourly_limit} emails/hour · Minimum
                 interval: {selectedSender.min_interval_seconds} seconds
               </p>
             )}
@@ -815,7 +558,7 @@ function App() {
             </label>
             <input
               type="datetime-local"
-              min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+              min={localDateTime(Date.now() + 60000)}
               value={startTime}
               onChange={event => setStartTime(event.target.value)}
               className="dark-field mt-2 w-full rounded-lg border border-slate-700 px-3 py-2.5"
@@ -837,10 +580,7 @@ function App() {
             </div>
 
             <p className="mt-3 rounded-lg border border-violet-500/20 bg-violet-500/10 p-3 text-xs leading-5 text-violet-200">
-              Send Now queues emails for immediate processing. Scheduling
-              uses your selected start time and delay. Selected attachments
-              will be included with each recipient's email. Actual sending
-              depends on your backend worker and sender rate limits.
+              Send Now marks emails as sent in the simulation. Scheduling uses your selected start time and delay. Attachments are selected locally only. Backend rate limits and SMTP delivery are not executed in demo mode.
             </p>
 
             {message && (
@@ -856,7 +596,6 @@ function App() {
               <button
                 type="button"
                 onClick={() => setShowCompose(false)}
-                disabled={submitting}
                 className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 disabled:opacity-50"
               >
                 Cancel
@@ -864,28 +603,18 @@ function App() {
 
               <button
                 type="button"
-                onClick={() => void scheduleEmails()}
-                disabled={submitting || uploadingAttachments}
+                onClick={() => submitDemoEmails(false)}
                 className="rounded-lg border border-violet-500/60 px-4 py-2 text-sm font-semibold text-violet-300 transition hover:bg-violet-500/10 disabled:opacity-50"
               >
-                {uploadingAttachments
-                  ? 'Uploading files...'
-                  : submitting
-                    ? 'Processing...'
-                    : 'Schedule emails'}
+                Schedule emails
               </button>
 
               <button
                 type="button"
-                onClick={() => void sendEmailsNow()}
-                disabled={submitting || uploadingAttachments}
+                onClick={() => submitDemoEmails(true)}
                 className="rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-950/30 transition hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
               >
-                {uploadingAttachments
-                  ? 'Uploading files...'
-                  : submitting
-                    ? 'Processing...'
-                    : 'Send Now'}
+                Send Now
               </button>
             </div>
           </div>

@@ -3,7 +3,6 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 
-import googleAuthRoutes from "./routes/google-auth.routes";
 import slackRoutes from "./routes/slack.routes";
 import attachmentRoutes from "./routes/attachment.routes";
 import emailRoutes from "./routes/email.routes";
@@ -40,7 +39,7 @@ app.use("/admin/queues", serverAdapter.getRouter());
 app.use("/api/emails", emailRoutes);
 app.use("/api/senders", senderRoutes);
 app.use("/api/attachments", attachmentRoutes);
-app.use("/api/auth/google", googleAuthRoutes);
+
 
 // Health check
 app.get("/api/health", (_req, res) => {
@@ -79,7 +78,7 @@ async function startServer() {
     await createEmailIndex();
     console.log("Elasticsearch emails index is ready.");
 
-    app.listen(PORT, () => {
+    app.listen(PORT, "127.0.0.1", () => {
       console.log(`Backend server running at http://localhost:${PORT}`);
       console.log(
         `Bull Board dashboard: http://localhost:${PORT}/admin/queues`
