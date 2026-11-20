@@ -2,15 +2,9 @@
 
 A full-stack email scheduling application that lets users compose email campaigns, upload leads, schedule deliveries, and monitor email status from a dashboard.
 
-## Public demo (Vercel)
-
-Run `npm ci` and `npm run dev` at the project root. For Vercel use the Vite preset, build command `npm run build`, output directory `dist`. No backend or environment variables required. The sample dashboard uses in-memory state, supports composing, CSV/TXT parsing, local attachment selection, scheduling and simulated sending. Scheduled records become simulated sent records while the page is open. Refresh or logout resets the data. No data is uploaded or delivered externally. Rate limits, queue processing and SMTP are not exercised by the public demo.
-
-The existing backend and worker are retained for separate local engineering tests. The backend binds to loopback only. The original API is not authenticated; do not expose it over a public network or proxy. The feature and architecture descriptions below refer to the retained backend implementation, not the browser-only demo.
-
 ## Features
 
-- **Demo login:** Enter a browser-only sample workspace; no Google account required.
+- **Guest login:** Local full-stack workspace and separate public simulation. No Google credentials needed.
 - **Email scheduling:** Schedule emails for a future time using BullMQ and Redis delayed jobs.
 - **Email sending:** Process scheduled jobs using a dedicated worker and SMTP.
 - **Lead uploads:** Import email addresses from CSV and TXT files.
@@ -62,32 +56,7 @@ Install the following before running the project:
 - Redis
 - Elasticsearch
 
-Slack credentials are only needed for local backend integration testing.
-
-## Environment Configuration
-
-Create the required environment files locally. **Never commit `.env` files or real credentials.**
-
-### Frontend
-
-No environment variables are required for the demo.
-
-### Backend
-
-In `backend/.env`, configure the variables expected by the backend, including:
-
-```env
-FRONTEND_URL=http://localhost:5174
-SLACK_CLIENT_ID=your_slack_client_id
-SLACK_CLIENT_SECRET=your_slack_client_secret
-SLACK_REDIRECT_URI=http://localhost:3000/api/slack/callback
-SLACK_TOKEN_ENCRYPTION_KEY=your_64_character_hex_key
-SLACK_NOTIFICATION_CHANNEL=your_slack_channel_id
-```
-
-Configure the PostgreSQL connection, Redis connection, Elasticsearch endpoint, SMTP host, SMTP port, SMTP credentials, and any other required settings according to the backend configuration and source code. Use Ethereal Email credentials for test email delivery.
-
-Do not expose OAuth client secrets or SMTP credentials in frontend variables.
+Use Docker Desktop and run `docker compose up -d` from the root. Copy `backend/.env.example` to `backend/.env` and fill SMTP_USER and SMTP_PASS with test credentials from https://ethereal.email/. Never commit .env. Slack is optional; configure its original environment variables if testing Slack.
 
 ## Installation
 
@@ -162,7 +131,7 @@ npm run build
 
 The demonstration video should be no longer than five minutes and show:
 
-1. Demo login and the user profile.
+1. Guest login and the user profile.
 2. The email dashboard and compose form.
 3. Uploading a small CSV or TXT leads file.
 4. Scheduling an email with a future execution time.
@@ -176,10 +145,18 @@ Use a controlled test recipient and test credentials. Do not show secrets, priva
 ## Security Notes
 
 - Keep environment files and credentials out of version control.
-- Demo login is not authentication. The backend is local-only and must not be exposed publicly without real API authentication.
+- Guest login is not authentication; keep the backend local.
 - Configure authentication and authorization before exposing protected operations or the queue dashboard publicly.
 - Use test email accounts and follow applicable email-sending rules.
 
 ## Project Status
 
-The demo changes need a fresh build and browser verification.
+Localhost uses the restored API-backed frontend. Remote hosts (including Vercel) use the separate browser-only simulation, with no backend requests. Set VITE_PUBLIC_DEMO=true locally if you want to preview that simulation. The local backend binds to loopback; do not expose it publicly until real authentication, authorization and abuse controls are implemented.
+
+After starting the API, create a sender using PowerShell (replace the email with your Ethereal SMTP username):
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/senders -ContentType 'application/json' -Body (@{name='Test Sender'; email='YOUR_ETHEREAL_USERNAME'; hourlyLimit=20; minIntervalSeconds=60} | ConvertTo-Json)
+```
+
+Start the worker and frontend as described above. Test only with Ethereal. End-to-end verification requires running the services.

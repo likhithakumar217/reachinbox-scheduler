@@ -30,6 +30,16 @@ createBullBoard({
 });
 
 // Middleware
+// This guest-mode backend is for local development only.
+const allowedOrigin = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/;
+app.use((req, res, next) => {
+  const origin = req.get("origin");
+  if (origin && !allowedOrigin.test(origin)) {
+    res.status(403).json({ message: "Local origins only." });
+    return;
+  }
+  next();
+});
 app.use(cors());
 app.use(express.json());
 
